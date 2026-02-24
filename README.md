@@ -14,15 +14,6 @@ Berangkat dari kekhawatiran (*privacy concerns*) tersebut, **Seratan Sakedap** (
 
 ---
 
-## 📸 Tampilan Dashboard
-
-> *Antarmuka yang bersih dan interaktif dengan tab navigasi, dirancang untuk memproses dokumen dengan cepat tanpa meninggalkan jejak.*
-
-![Tampilan Dashboard](SeratanSakedap/Dashboard_Utilitas.png)
-*(Catatan: Ganti dengan path screenshot aplikasi Anda)*
-
----
-
 ## 🚀 Fitur Utama & Protokol Keamanan
 
 * 🛡️ **Military-Grade Auto-Delete (Secure Wipe)**: Ini bukan sekadar fungsi hapus (`os.remove`) biasa. Sistem secara asinkron akan menimpa isi file Anda dengan deretan kode acak (*random bytes*) sebelum menghapusnya secara fisik. File tidak akan bisa dikembalikan (*recovery*) oleh *software* apa pun.
