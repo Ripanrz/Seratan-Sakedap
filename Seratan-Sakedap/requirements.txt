@@ -1,0 +1,5 @@
+gradio
+pypdf
+pdf2docx
+PyMuPDF
+Pillow
