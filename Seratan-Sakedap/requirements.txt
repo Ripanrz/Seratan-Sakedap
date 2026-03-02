@@ -1,5 +1,6 @@
 gradio
 pypdf
 pdf2docx
-PyMuPDF
+pymupdf
 Pillow
+docx2pdf
