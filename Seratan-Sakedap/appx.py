@@ -4,169 +4,203 @@ import time
 import threading
 import uuid
 import secrets
+import fitz  # PyMuPDF
 from pypdf import PdfReader, PdfWriter
 from pdf2docx import Converter
-import fitz  # PyMuPDF
 from PIL import Image
 
 # ==========================================
-# 1. SISTEM KEAMANAN (SECURE WIPE 5 MENIT)
+# 1. SISTEM KEAMANAN & MANAJEMEN FILE
 # ==========================================
 FOLDER_TEMP = "./secure_temp_pdf"
-
-# Buat folder sementara jika belum ada
 if not os.path.exists(FOLDER_TEMP):
     os.makedirs(FOLDER_TEMP)
 
 def penghancur_file_permanen(filepath):
-    """Menimpa isi file dengan data acak sebelum menghapusnya agar tidak bisa di-recovery (Secure Wipe)"""
     try:
         if os.path.exists(filepath):
             ukuran_file = os.path.getsize(filepath)
-            # Timpa file dengan data acak
             with open(filepath, "br+") as f:
                 f.write(secrets.token_bytes(ukuran_file))
-            # Hapus file secara fisik dari server
             os.remove(filepath)
-            print(f"🔒 AMAN: File {os.path.basename(filepath)} telah dihancurkan permanen.")
     except Exception as e:
         print(f"Gagal menghapus {filepath}: {e}")
 
 def sapu_bersih_otomatis():
-    """Berjalan di latar belakang, mengecek folder setiap 1 menit"""
     while True:
         waktu_sekarang = time.time()
         for nama_file in os.listdir(FOLDER_TEMP):
             path_file = os.path.join(FOLDER_TEMP, nama_file)
-            waktu_file = os.path.getmtime(path_file)
-            
-            # Jika umur file > 300 detik (5 menit)
-            if waktu_sekarang - waktu_file > 300:
+            if waktu_sekarang - os.path.getmtime(path_file) > 300:
                 penghancur_file_permanen(path_file)
         time.sleep(60)
 
-# Aktifkan robot keamanan di latar belakang
 threading.Thread(target=sapu_bersih_otomatis, daemon=True).start()
 
-def buat_nama_file_unik(ekstensi):
-    """Membuat nama file acak agar tidak bentrok antar pengguna"""
-    return os.path.join(FOLDER_TEMP, f"{uuid.uuid4().hex}.{ekstensi}")
+def buat_nama_file(path_asli, ekstensi_baru, suffix=""):
+    nama_dasar = os.path.splitext(os.path.basename(path_asli))[0] if path_asli else f"file_{uuid.uuid4().hex[:4]}"
+    return os.path.join(FOLDER_TEMP, f"{nama_dasar}{suffix}_{uuid.uuid4().hex[:4]}.{ekstensi_baru}")
+
+# FUNGSI BANTUAN: Memastikan hanya 1 file yang diproses jika input berupa list
+def ambil_satu_file(file_input):
+    if isinstance(file_input, list):
+        return file_input[0] if len(file_input) > 0 else None
+    return file_input
 
 # ==========================================
-# 2. FUNGSI-FUNGSI UTILITAS PDF
+# 2. LOGIKA FITUR (BACKEND)
 # ==========================================
 
-# 1. Kompres PDF (Mengurangi ukuran file)
-def kompres_pdf(file_pdf):
+def pdf_ke_word(file_pdf):
+    file_pdf = ambil_satu_file(file_pdf)
     if not file_pdf: return None
-    path_output = buat_nama_file_unik("pdf")
-    # Membaca dan menyimpan ulang dengan kompresi maksimal (Deflate & Garbage Collection)
-    doc = fitz.open(file_pdf.name)
-    doc.save(path_output, deflate=True, garbage=4)
-    doc.close()
-    return path_output
-
-# 2. Gabung PDF
-def gabung_pdf(file_pdfs):
-    if not file_pdfs: return None
-    path_output = buat_nama_file_unik("pdf")
-    writer = PdfWriter()
-    for file in file_pdfs:
-        writer.append(file.name)
-    writer.write(path_output)
-    writer.close()
-    return path_output
-
-# 3. Pisah PDF
-def pisah_pdf(file_pdf, hal_mulai, hal_akhir):
-    if not file_pdf: return None
-    path_output = buat_nama_file_unik("pdf")
-    reader = PdfReader(file_pdf.name)
-    writer = PdfWriter()
-    
-    # Menyesuaikan index (User input mulai dari 1, Python mulai dari 0)
-    idx_mulai = max(0, int(hal_mulai) - 1)
-    idx_akhir = min(len(reader.pages), int(hal_akhir))
-    
-    for i in range(idx_mulai, idx_akhir):
-        writer.add_page(reader.pages[i])
-        
-    writer.write(path_output)
-    writer.close()
-    return path_output
-
-# 4. PDF to Word
-def konversi_pdf_ke_word(file_pdf):
-    if not file_pdf: return None
-    path_output = buat_nama_file_unik("docx")
+    path_output = buat_nama_file(file_pdf.name, "docx", "_Word")
     cv = Converter(file_pdf.name)
     cv.convert(path_output)
     cv.close()
     return path_output
 
-# 5. Image to PDF
-def konversi_gambar_ke_pdf(file_gambars):
+def pdf_ke_gambar(file_pdf):
+    file_pdf = ambil_satu_file(file_pdf)
+    if not file_pdf: return None
+    doc = fitz.open(file_pdf.name)
+    paths = []
+    for i in range(len(doc)):
+        page = doc.load_page(i)
+        pix = page.get_pixmap()
+        img_path = buat_nama_file(file_pdf.name, "png", f"_hal_{i+1}")
+        pix.save(img_path)
+        paths.append(img_path)
+    doc.close()
+    return paths[0] 
+
+def gambar_ke_pdf(file_gambars):
     if not file_gambars: return None
-    path_output = buat_nama_file_unik("pdf")
+    path_output = buat_nama_file(file_gambars[0].name, "pdf", "_Converted")
+    imgs = [Image.open(f.name).convert('RGB') for f in file_gambars]
+    imgs[0].save(path_output, save_all=True, append_images=imgs[1:])
+    return path_output
+
+def gabung_pdf(file_pdfs):
+    if not file_pdfs: return None
+    path_output = buat_nama_file(file_pdfs[0].name, "pdf", "_Gabungan")
+    writer = PdfWriter()
+    for f in file_pdfs: writer.append(f.name)
+    writer.write(path_output)
+    return path_output
+
+def pisah_pdf(file_pdf, m, a):
+    file_pdf = ambil_satu_file(file_pdf)
+    if not file_pdf or m is None or a is None: return None
     
-    # Buka semua gambar dan konversi ke format RGB (Syarat PDF)
-    daftar_gambar = []
-    for f in file_gambars:
-        img = Image.open(f.name).convert('RGB')
-        daftar_gambar.append(img)
-        
-    # Simpan gambar pertama sebagai PDF, lalu gabungkan sisanya di halaman berikutnya
-    if daftar_gambar:
-        daftar_gambar[0].save(path_output, save_all=True, append_images=daftar_gambar[1:])
-        
+    path_output = buat_nama_file(file_pdf.name, "pdf", f"_Hal_{int(m)}-{int(a)}")
+    reader = PdfReader(file_pdf.name)
+    writer = PdfWriter()
+    
+    idx_mulai = max(0, int(m) - 1)
+    idx_akhir = min(int(a), len(reader.pages))
+    
+    for i in range(idx_mulai, idx_akhir):
+        writer.add_page(reader.pages[i])
+    writer.write(path_output)
+    return path_output
+
+def kompres_gambar(file_img):
+    file_img = ambil_satu_file(file_img)
+    if not file_img: return None
+    path_output = buat_nama_file(file_img.name, "jpg", "_Compressed")
+    img = Image.open(file_img.name)
+    if img.mode != "RGB": img = img.convert("RGB")
+    img.save(path_output, "JPEG", quality=40, optimize=True)
+    return path_output
+
+def kompres_pdf_fixed(file_pdf):
+    file_pdf = ambil_satu_file(file_pdf)
+    if not file_pdf: return None
+    path_output = buat_nama_file(file_pdf.name, "pdf", "_Ringan")
+    doc = fitz.open(file_pdf.name)
+    doc.save(path_output, deflate=True, garbage=4)
+    doc.close()
     return path_output
 
 # ==========================================
-# 3. ANTARMUKA WEB (GRADIO UI)
+# 3. TAMPILAN (GRADIO UI)
 # ==========================================
-with gr.Blocks(theme=gr.themes.Monochrome()) as web_app:
-    gr.Markdown("# 🛡️ SecurePDF Tools (Zero-Retention)")
-    gr.Markdown("✅ **Privacy by Design:** File Anda **tidak disimpan**. Server akan menimpa data Anda dengan kode acak (Secure Wipe) dan menghapusnya secara fisik dalam waktu maksimal **5 menit** setelah proses selesai. Data tidak akan bisa dipulihkan oleh siapa pun.")
+theme = gr.themes.Soft(primary_hue="blue", secondary_hue="slate").set(
+    button_primary_background_fill="*primary_600",
+    block_radius="md"
+)
+
+css = """
+.container { max-width: 1000px; margin: auto; }
+.header { text-align: center; padding: 20px; }
+.footer-info { font-size: 0.8em; text-align: center; color: gray; }
+"""
+
+with gr.Blocks(title="Seratan-Sakedap Pro") as app:
     
+    with gr.Column(elem_classes="header"):
+        gr.Markdown("# 📄 Seratan-Sakedap")
+        gr.Markdown("### Solusi Dokumen Cepat & Aman")
+
     with gr.Tabs():
-        # TAB 1: Gabung PDF
-        with gr.TabItem("🔗 Gabung PDF"):
-            input_gabung = gr.File(label="Unggah Beberapa PDF", file_count="multiple")
-            btn_gabung = gr.Button("Gabungkan File 🚀", variant="primary")
-            output_gabung = gr.File(label="📥 Download Hasil PDF")
-            btn_gabung.click(fn=gabung_pdf, inputs=input_gabung, outputs=output_gabung)
-
-        # TAB 2: Pisah PDF
-        with gr.TabItem("✂️ Pisah PDF"):
-            input_pisah = gr.File(label="Unggah 1 PDF", file_count="single")
+        with gr.TabItem("🛠️ PDF Utama"):
             with gr.Row():
-                input_mulai = gr.Number(label="Dari Halaman (Contoh: 1)", value=1, precision=0)
-                input_akhir = gr.Number(label="Sampai Halaman (Contoh: 5)", value=5, precision=0)
-            btn_pisah = gr.Button("Pisahkan File 🚀", variant="primary")
-            output_pisah = gr.File(label="📥 Download Hasil PDF")
-            btn_pisah.click(fn=pisah_pdf, inputs=[input_pisah, input_mulai, input_akhir], outputs=output_pisah)
+                with gr.Column():
+                    f_pdf = gr.File(label="Pilih File PDF", file_count="multiple")
+                    with gr.Row():
+                        start_h = gr.Number(label="Mulai Hal", value=1, precision=0)
+                        end_h = gr.Number(label="Sampai Hal", value=2, precision=0)
+                with gr.Column():
+                    btn_mrg = gr.Button("🔗 Gabung PDF")
+                    btn_spl = gr.Button("✂️ Pisah PDF")
+                    btn_com_p = gr.Button("🗜️ Kompres PDF")
+                    out_pdf = gr.File(label="Hasil PDF")
 
-        # TAB 3: PDF to Word
-        with gr.TabItem("📝 PDF to Word"):
-            input_p2w = gr.File(label="Unggah PDF", file_count="single")
-            btn_p2w = gr.Button("Konversi ke Word 🚀", variant="primary")
-            output_p2w = gr.File(label="📥 Download File Word (.docx)")
-            btn_p2w.click(fn=konversi_pdf_ke_word, inputs=input_p2w, outputs=output_p2w)
+        with gr.TabItem("🔄 Konversi"):
+            with gr.Row():
+                with gr.Column():
+                    f_conv = gr.File(label="Upload File (PDF/Gambar)", file_count="multiple")
+                with gr.Column():
+                    # PERUBAHAN: Mengembalikan tombol menjadi PDF ke Word
+                    btn_p2w = gr.Button("PDF ke Word")
+                    btn_p2i = gr.Button("PDF ke Gambar")
+                    btn_i2p = gr.Button("Gambar ke PDF")
+                    out_conv = gr.File(label="Hasil Konversi")
 
-        # TAB 4: Image to PDF
-        with gr.TabItem("🖼️ Image to PDF"):
-            input_img = gr.File(label="Unggah Gambar (JPG/PNG)", file_count="multiple", file_types=["image"])
-            btn_img = gr.Button("Konversi Gambar ke PDF 🚀", variant="primary")
-            output_img = gr.File(label="📥 Download File PDF")
-            btn_img.click(fn=konversi_gambar_ke_pdf, inputs=input_img, outputs=output_img)
+        with gr.TabItem("🖼️ Image Tool"):
+            with gr.Row():
+                with gr.Column():
+                    f_img = gr.File(label="Upload Gambar", file_types=["image"])
+                with gr.Column():
+                    btn_com_i = gr.Button("🗜️ Kompres Gambar", variant="primary")
+                    out_img = gr.File(label="Hasil Kompresi")
 
-        # TAB 5: Kompres PDF
-        with gr.TabItem("🗜️ Kompres PDF"):
-            gr.Markdown("*Proses ini akan mengoptimalkan struktur PDF dan membuang metadata yang tidak berguna untuk memperkecil ukuran file.*")
-            input_kompres = gr.File(label="Unggah PDF", file_count="single")
-            btn_kompres = gr.Button("Kompres File 🚀", variant="primary")
-            output_kompres = gr.File(label="📥 Download Hasil Kompresi")
-            btn_kompres.click(fn=kompres_pdf, inputs=input_kompres, outputs=output_kompres)
+    with gr.Row():
+        btn_reset = gr.Button("🗑️ Reset Tampilan & Hapus Semua", variant="stop")
+
+    gr.Markdown("---")
+    gr.Markdown("🔒 *Keamanan: File dihancurkan permanen secara berkala setiap 5 menit.*", elem_classes="footer-info")
+
+    btn_mrg.click(gabung_pdf, f_pdf, out_pdf)
+    btn_spl.click(pisah_pdf, [f_pdf, start_h, end_h], out_pdf)
+    btn_com_p.click(kompres_pdf_fixed, f_pdf, out_pdf)
+    
+    # PERUBAHAN: Memanggil fungsi pdf_ke_word
+    btn_p2w.click(pdf_ke_word, f_conv, out_conv)
+    btn_p2i.click(pdf_ke_gambar, f_conv, out_conv)
+    btn_i2p.click(gambar_ke_pdf, f_conv, out_conv)
+    
+    btn_com_i.click(kompres_gambar, f_img, out_img)
+
+    def reset_ui():
+        return [None]*7 
+
+    btn_reset.click(
+        fn=reset_ui, 
+        inputs=None, 
+        outputs=[f_pdf, f_conv, f_img, out_pdf, out_conv, out_img, f_pdf]
+    )
 
 if __name__ == "__main__":
-    web_app.launch()
+    app.launch(theme=theme, css=css)
