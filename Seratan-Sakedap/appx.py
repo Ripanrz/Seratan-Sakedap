@@ -137,10 +137,10 @@ css = """
 .footer-info { font-size: 0.8em; text-align: center; color: gray; }
 """
 
-with gr.Blocks(title="Seratan-Sakedap Pro") as app:
+with gr.Blocks(title="Seratan Sakedap") as app:
     
     with gr.Column(elem_classes="header"):
-        gr.Markdown("# 📄 Seratan-Sakedap")
+        gr.Markdown("# 📄 Seratan Sakedap — Secure Zero-Retention PDF Utility")
         gr.Markdown("### Solusi Dokumen Cepat & Aman")
 
     with gr.Tabs():
@@ -162,7 +162,7 @@ with gr.Blocks(title="Seratan-Sakedap Pro") as app:
                 with gr.Column():
                     f_conv = gr.File(label="Upload File (PDF/Gambar)", file_count="multiple")
                 with gr.Column():
-                    # PERUBAHAN: Mengembalikan tombol menjadi PDF ke Word
+
                     btn_p2w = gr.Button("PDF ke Word")
                     btn_p2i = gr.Button("PDF ke Gambar")
                     btn_i2p = gr.Button("Gambar ke PDF")
@@ -186,7 +186,6 @@ with gr.Blocks(title="Seratan-Sakedap Pro") as app:
     btn_spl.click(pisah_pdf, [f_pdf, start_h, end_h], out_pdf)
     btn_com_p.click(kompres_pdf_fixed, f_pdf, out_pdf)
     
-    # PERUBAHAN: Memanggil fungsi pdf_ke_word
     btn_p2w.click(pdf_ke_word, f_conv, out_conv)
     btn_p2i.click(pdf_ke_gambar, f_conv, out_conv)
     btn_i2p.click(gambar_ke_pdf, f_conv, out_conv)
