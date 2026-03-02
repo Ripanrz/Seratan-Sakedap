@@ -1,6 +1,7 @@
 # 📄 Seratan Sakedap - Secure Zero-Retention PDF Utility
 
 [![Live Demo on Hugging Face](https://img.shields.io/badge/Live%20Demo-%F0%9F%A4%97%20Hugging%20Face-blue?style=for-the-badge)](https://huggingface.co/spaces/Ripanrz/Seratan-Sakedap)
+
 ![Python](https://img.shields.io/badge/Python-3.x-blue.svg)
 ![Security](https://img.shields.io/badge/Security-Secure_Wipe_Protocol-red)
 ![PyPDF](https://img.shields.io/badge/Library-PyPDF_&_PyMuPDF-green)
